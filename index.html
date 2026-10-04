@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <link
+        rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>"
+    >
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AnthonyBudd/Llama.cpp-WASM-WebGPU</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script
+        src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.min.mjs"
+        type="module"
+    ></script>
+
+    <style type="text/tailwindcss">
+        .dragging {
+            @apply border-[#4da3ff] bg-[#181818];
+        }
+        .enabled {
+            @apply opacity-100 cursor-pointer pointer-events-auto;
+        }
+        .disabled {
+            @apply opacity-50 cursor-not-allowed pointer-events-none;
+        }
+    </style>
+</head>
+
+<body class="m-0 min-h-screen flex items-center justify-center bg-[#111] text-[#eee] font-sans antialiased">
+    <div
+        id="app"
+        class="w-[min(900px,95vw)]"
+    >
+        <h1 class="mb-2 text-3xl font-semibold">AnthonyBudd/Llama.cpp-WASM-WebGPU</h1>
+
+        <p class="m-0 text-[#999]">
+            This repo is a technical proof of concept showing an LLM running client-side in a browser using Llama.cpp compiled to WASM with WebGPU.
+            <br>
+            <br>
+            Use the dropdown to select a model, once the model has loaded, drop a .PDF file onto the page and the model will summarize the document. Qwen2.5-0.5B is smaller but less accurate, Qwen3.5-0.8B generates far better results but takes a lot longer to return results. Open the console for additional information.
+        </p>
+
+        <div class="mt-5 flex items-center gap-3">
+            <label
+                for="modelSelect"
+                class="font-medium text-[#ccc]"
+            >Model:</label>
+            <select
+                id="modelSelect"
+                name="modelSelect"
+                class="rounded-md border border-[#555] bg-[#1a1a1a] text-[#eee] px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#4da3ff]"
+            >
+                <option value="">Select Model</option>
+                <option value="qwen2.5-0.5b-instruct-q2_k">Qwen2.5-0.5b-instruct-q2_k.gguf (fast)</option>
+                <option value="qwen3.5-0.8b-iq4_xs">Qwen3.5-0.8B-IQ4_XS.gguf (best)</option>
+            </select>
+        </div>
+
+        <div
+            id="dropZone"
+            class="mt-[30px] h-[150px] flex items-center justify-center text-center rounded-2xl border-2 border-dashed border-[#555] transition-[border-color,background-color] duration-200 hover:border-[#4da3ff] hover:bg-[#181818] cursor-pointer disabled"
+        >
+            <div
+                id="dropText"
+                class="pointer-events-none"
+            >
+                <strong>Drop a .PDF file here</strong>
+                <br><br>
+                or click to select a file
+            </div>
+        </div>
+
+        <input
+            id="pdfInput"
+            type="file"
+            class="hidden"
+        >
+
+        <div
+            id="terminal"
+            tabindex="0"
+            class="mt-[30px] h-[350px] overflow-auto whitespace-pre-wrap rounded-[10px] bg-[#191c22] p-6 text-base leading-relaxed text-[#e3e6ea] font-normal shadow-lg transition-all"
+        ></div>
+    </div>
+
+</body>
+
+<script type="module">
+    import { LlamaWebGpuBridge } from './llama_webgpu_bridge.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.mjs";
+
+    const dropZone = document.getElementById('dropZone');
+    const pdfInput = document.getElementById('pdfInput');
+    const terminal = document.getElementById('terminal');
+    const modelSelect = document.getElementById('modelSelect');
+
+    let bridge = null;
+    let isSummarizing = false;
+
+    modelSelect.addEventListener('change', (event) => loadModel(event.target.value));
+
+    // Load selected model
+    async function loadModel(model) {
+        if (!model || isSummarizing) return;
+        output(`Loading Model: ${model}.gguf`);
+        bridge = new LlamaWebGpuBridge({
+            wasmUrl: './llama_webgpu_core.wasm',
+            coreModuleUrl: './llama_webgpu_core.js',
+            workerUrl: './llama_webgpu_bridge_worker.js',
+            disableWorker: true,
+            logLevel: 2,
+            threads: 2,
+
+            // HINT: Uncomment this to see the logs in the console
+            // logger: {
+            //     log(message) { output(String(message)); },
+            //     warn(message) { output(String(message)); },
+            //     error(message) { output(String(message)); },
+            // },
+        });
+
+        await bridge.loadModelFromUrl(`./${model}.gguf`, {
+            nCtx: 131072, // 131072 (128KB) context size
+            nGpuLayers: 0,
+            progressCallback: ({ loaded, total }) => {
+                if (total) output(`Loading Model: ${Math.round((loaded / total) * 100)}%`);
+            },
+        });
+
+        dropZone.classList.add('enabled');
+        dropZone.classList.remove('disabled');
+    }
+
+    // PDF Dropzone
+    dropZone.addEventListener('dragover', event => {
+        if (!bridge) return;
+        event.preventDefault();
+        dropZone.classList.add('dragging');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+    dropZone.addEventListener('click', () => pdfInput.click());
+    dropZone.addEventListener('drop', event => {
+        if (!bridge) return;
+        event.preventDefault();
+        dropZone.classList.remove('dragging');
+        const files = event.dataTransfer.files;
+        if (!files.length) return;
+        loadFile(files[0]);
+    });
+    pdfInput.addEventListener('change', () => {
+        if (!pdfInput.files.length) return;
+        loadFile(pdfInput.files[0]);
+    });
+
+
+    // Load PDF file and extract text
+    async function loadFile(file) {
+        if (isSummarizing) return;
+
+        output(``);
+        output(`Loading File: ${file.name}`);
+
+        dropZone.classList.remove('enabled');
+        dropZone.classList.add('disabled');
+
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        if (!isPdf) return output('The selected file is not a PDF!');
+
+        let text = '';
+        const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map(item => 'str' in item ? item.str : '').join(' ');
+            text += '\n\n';
+        }
+
+        console.log(text);
+        summarizeDocument(text);
+    }
+
+
+    // Summarize document 
+    async function summarizeDocument(documentText) {
+        isSummarizing = true;
+        let response = '';
+        const answer = await bridge.createCompletion(`Give a brief summary of the following document text: ${documentText}`, {
+            nPredict: 512,
+            temp: 0.1,
+            onToken: (piece, currentText) => {
+                const text = (typeof piece === 'string') ? piece : new TextDecoder().decode(piece);
+                response += text;
+                terminal.textContent += text;
+                terminal.scrollTop = terminal.scrollHeight;
+            },
+        });
+
+        console.log(response);
+        isSummarizing = false;
+    }
+
+
+    // Output to terminal
+    function output(message) {
+        console.log(message);
+        terminal.textContent += message + "\n";
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+</script>
+
+</html>
