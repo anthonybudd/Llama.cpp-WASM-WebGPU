@@ -4,9 +4,7 @@ This repo is a technical proof of concept showing an LLM running client-side in 
 
 This demo will summarize a PDF document. First use the dropdown to select a model, once the model has loaded, drop a .PDF file onto the page and the model will summarize the document. Qwen2.5-0.5B is smaller but less accurate, Qwen3.5-0.8B generates far better results but takes a lot longer to return results. Open the console for additional information.
 
-<p align="center">
-    [Live Demo: llama-cpp-wasm-webgpu.anthonybudd.io](https://llama-cpp-wasm-webgpu.anthonybudd.io) 
-</p>
+[Live Demo: llama-cpp-wasm-webgpu.anthonybudd.io](https://llama-cpp-wasm-webgpu.anthonybudd.io)
 
 ### Local Set-up
 
