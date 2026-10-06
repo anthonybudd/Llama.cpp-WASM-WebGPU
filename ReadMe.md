@@ -22,16 +22,3 @@ docker run -p 80:80 --rm -it -v $(pwd):/usr/share/nginx/html llama-webgpu
 
 open http://localhost
 ```
-
-### Details
-
-#### Step 1: Select model
-When you use the dropdown to select a model, the .gguf file will be downloaded from the host server to the client browser. When the model data has been sent to the client it will be loaded into llama.cpp. 
-
-
-#### Step 2: Select a .pdf
-Then you select a PDF. The file will be loaded into the browser and the text will be extracted.
-
-
-#### Step 3: LLM text summary
-The document text will be sent to the LLM in llama.cpp 
