@@ -12,7 +12,7 @@ This demo will summarize a PDF document. First use the dropdown to select a mode
 
 ```sh
 git clone git@github.com:anthonybudd/Llama.cpp-WASM-WebGPU.git
-cd Llama.cpp-WASM-WebGPU.git
+cd Llama.cpp-WASM-WebGPU
 
 wget -O qwen2.5-0.5b-instruct-q2_k.gguf "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q2_k.gguf?download=true"
 wget -O qwen3.5-0.8b-iq4_xs.gguf "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-IQ4_XS.gguf?download=true"
